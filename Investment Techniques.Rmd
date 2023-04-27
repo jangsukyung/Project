@@ -1,0 +1,621 @@
+---
+title: "Investment Techniques"
+author: "Jang Su Kyung"
+date: "2023-02-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<br />
+
+#### 저는 요즘 전세대를 아울러 관심이 많은 분야 중 하나인 재테크에 대해 관심이 많이 있습니다.
+#### 그래서 요즘에 사람들이 많이 하는 재테크가 무엇인지 궁금하여 관련 내용을 수집해보려고 합니다.
+#### 재테크에 대해 크롤링하여 키워드를 추출하고 그 키워드와 관련된 내용을 수집해보겠습니다.
+#### 뉴스를 크롤링하면 관련 없는 내용이 많이 추출되어 저는 블로그 글을 크롤링하였습니다.
+<br />
+
+# **1.재테크 데이터 수집 및 시각화**
+
+### **A. 라이브러리 설치**
+```{r}
+library(KoNLP)
+library(wordcloud)
+library(wordcloud2)
+library(ggplot2)
+library(rvest)
+library(stringr)
+```
+<br />
+
+#### 1) <span style="color:red">**데이터 수집 및 분석을 하기 위해 필요한 라이브러리**</span>를 설치합니다.
+#### 2) <span style="color:red">**KoNLP, wordcloud, wordcloud2, ggplot2, rvest, stringr**</span>을 불러옵니다.
+
+<br />
+
+### **B. 빈 벡터 생성**
+```{r}
+title <- c()
+blog <- c()
+time <- c()
+body <- c()
+p_url <- 'https://search.daum.net/search?w=blog&DA=PGD&enc=utf8&q=%EC%9E%AC%ED%85%8C%ED%81%AC%20%EC%B6%94%EC%B2%9C&p='
+```
+<br />
+
+#### 1) <span style="color:red">**제목, 블로그명, 시간, 내용을 저장하기 위한 빈 벡터**</span>를 생성합니다.
+#### 2) <span style="color:red">**p_url에 크롤링할 사이트 url**</span>을 삽입합니다.
+<br />
+
+### **C. 재테크 관련 데이터 수집**
+```{r}
+for(i in 1:50){
+  c_url <- paste0(p_url,i)
+  title_css <- ".f_link_b"
+  time_css <- ".date"
+  blog_css <- '.f_l :nth-child(2)'
+  body_css <- "#blogColl .desc"
+  
+  html_doc <- read_html(p_url)
+  title_node <- html_nodes(html_doc,title_css)
+  blog_node <- html_nodes(html_doc,blog_css)
+  time_node <- html_nodes(html_doc,time_css)
+  body_node <- html_nodes(html_doc,body_css)
+  
+  title_part <- html_text(title_node)
+  blog_part <- html_text(blog_node)
+  time_part <- html_text(time_node)
+  body_part <- html_text(body_node)
+  
+  title <- c(title,title_part)
+  time <- c(time,time_part)
+  blog <- c(blog,blog_part)
+  body <- c(body,body_part)
+}
+it_blog <- data.frame(title,blog,time,body)
+head(it_blog)
+```
+<br />
+
+#### 1) <span style="color:red">**재테크 관련 데이터를 다음 블로그**</span>에서 수집합니다.
+#### 2) <span style="color:red">**1부터 50페이지**</span>까지 수집하였습니다.
+#### 3) <span style="color:red">**재테크를 추천하는 내용**</span>을 수집하였습니다.
+#### 4) head() 함수로 6개 행만 출력했습니다.
+<br />
+
+### **D. 재테크 데이터 정제**
+```{r}
+it_blogs <- it_blog
+it_text <- sapply(it_blogs,extractNoun,USE.NAMES = F)
+it_text <- unlist(it_text)
+it_text <- gsub('[^ㄱ-힣A-Za-z]','',it_text)
+it_text <- gsub('[추월|차선|들이|추월|유행|가운데|간단|종류|MJ|기존|재테크]','',it_text)
+it_count <- Filter(function(x){nchar(x)>=2 & nchar(x)<5},it_text)
+```
+<br />
+
+#### 1) 재테크 데이터에서 <span style="color:red">**2자 이상 5자 미만 명사**</span>를 추출했습니다.
+#### 2) <span style="color:red">**한글, 영어 대문자, 소문자**</span>만 추출하였습니다.
+#### 3) 관련이 없는 내용은 제거하였습니다.
+<br />
+
+### **E. 재테크 데이터 도수분포표**
+```{r}
+it_word <- table(it_count)
+head(sort(it_word,decreasing = T),30)
+```
+<br />
+
+#### 1) 데이터를 <span style="color:red">**도수분포표로 만들어서 상위 30행**</span>만 출력하였습니다.
+<br />
+
+### **F. 재테크 데이터 막대그래프 시각화**
+```{r}
+it <- head(sort(it_word,decreasing = T),10)
+it_bar <- barplot(it,col=rainbow(10),ylim=c(0,500),las=1)
+text(it_bar,it,paste0(it,"개"),pos=3,col=2,cex=1)
+```
+<br />
+
+#### 1) <span style="color:red">**상위 10개 키워드를 막대 그래프로 시각화**</span> 하였습니다.
+<br />
+
+### **G. 재테크 데이터 wordcloud 시각화**
+```{r}
+palate <- brewer.pal(9,"Set1")
+wordcloud(names(it_word),
+          freq=it_word,
+          min.freq = 2,
+          scale = c(7,0.3),
+          random.order = F,
+          random.color = T,
+          rot.per = 0.2,
+          colors = palate)
+```
+<br />
+
+#### 1) <span style="color:red">**재테크 데이터를 wordcloud로 시각화**</span> 하였습니다.
+#### 2) <span style="color:red">**부동산, 스터디**</span>가 가장 눈에 띄는 모습입니다.
+<br />
+
+### **H. 재테크 데이터 wordcloud2 시각화**
+```{r}
+wordcloud2(it_word,color = "random-light",
+           backgroundColor = "grey",
+           fontFamily = '나눔바른고딕')
+```
+<br />
+
+#### 1) <span style="color:red">**재테크 데이터를 wordcloud2로 시각화**</span> 하였습니다.
+<br />
+
+## **I. 재테크 데이터 요약**
+#### 1) <span style="color:red">**재테크 데이터를 다음 블로그**</span>에서 수집하였습니다.
+#### 2) 수집해서 <span style="color:red">**도수분포표로 만들고 시각화**</span> 하였습니다.
+#### 3) 시각화한 결과 <span style="color:red">**부동산, 주식, 영수증, 스터디**</span> 등이 가장 많이 수집되었습니다.
+#### 4) 그래서 <span style="color:red">**부동산 재테크에 대해 더 수집해보겠습니다.**</span>
+<br />
+
+# **2. 부동산 데이터 수집 및 시각화**
+
+### **A. 빈 벡터 생성**
+```{r}
+title_b <- c()
+blog_b <- c()
+time_b <- c()
+body_b <- c()
+p_url_b <- 'https://search.daum.net/search?nil_suggest=btn&w=blog&DA=PGD&q=%EB%B6%80%EB%8F%99%EC%82%B0+%EC%9E%AC%ED%85%8C%ED%81%AC&p='
+```
+<br />
+
+#### 1) 부동산 데이터를 수집하기 위해 빈 벡터를 생성했습니다.
+<br />
+
+### **B. 부동산 데이터 수집**
+```{r}
+for(i in 1:50){
+  c_url_b <- paste0(p_url_b,i)
+  title_b_css <- ".f_link_b"
+  time_b_css <- ".date"
+  blog_b_css <- '.f_l :nth-child(2)'
+  body_b_css <- "#blogColl .desc"
+  
+  html_b_doc <- read_html(p_url_b)
+  title_b_node <- html_nodes(html_b_doc,title_b_css)
+  blog_b_node <- html_nodes(html_b_doc,blog_b_css)
+  time_b_node <- html_nodes(html_b_doc,time_b_css)
+  body_b_node <- html_nodes(html_b_doc,body_b_css)
+  
+  title_b_part <- html_text(title_b_node)
+  blog_b_part <- html_text(blog_b_node)
+  time_b_part <- html_text(time_b_node)
+  body_b_part <- html_text(body_b_node)
+  
+  title_b <- c(title_b,title_b_part)
+  time_b <- c(time_b,time_b_part)
+  blog_b <- c(blog_b,blog_b_part)
+  body_b <- c(body_b,body_b_part)
+}
+b_blog <- data.frame(title_b,blog_b,time_b,body_b)
+head(b_blog)
+```
+<br />
+
+#### 1) <span style="color:red">**부동산 재테크 데이터를 다음 블로그에서 수집**</span>했습니다.
+#### 2) 수집한 내용을 6개 행을 출력했습니다.
+<br />
+
+### **C. 부동산 데이터 정제**
+```{r}
+b_blogs <- b_blog
+b_text <- sapply(b_blogs,extractNoun,USE.NAMES = F)
+b_text <- unlist(b_text)
+b_text <- gsub('[^ㄱ-힣A-Za-z]','',b_text)
+b_text <- gsub('[부동산|재테크|해서|부분|심심|MUJ|or|하기|베니아|대비|양권|투자]','',b_text)
+b_count <- Filter(function(x){nchar(x)>=2 & nchar(x)<5},b_text)
+```
+<br />
+
+#### 1) <span style="color:red">**데이터를 정제하는 과정은 재테크 데이터와 동일하게 진행했습니다.**</span>
+<br />
+
+### **D. 부동산 데이터 도수분포표**
+```{r}
+b_word <- table(b_count)
+head(sort(b_word,decreasing = T),30)
+```
+<br />
+
+#### 1) 부동산 데이터 <span style="color:red">**도수분포표를 정렬해서 상위 30개 키워드**</span>만 출력했습니다.
+<br />
+
+### **E. wordcloud 시각화**
+```{r}
+palate <- brewer.pal(9,"Set1")
+wordcloud(names(b_word),
+          freq=b_word,
+          min.freq = 2,
+          scale = c(6,0.1),
+          random.order = F,
+          random.color = T,
+          rot.per = 0.2,
+          colors = palate)
+```
+<br />
+
+#### 1) <span style="color:red">**부동산 재테크 데이터**</span>를 시각화하였습니다.
+#### 2) <span style="color:red">**관점, 막내들, 경제, 드라마, 마인드, 청약**</span> 등에 대해 출력됐습니다.
+#### 3) <span style="color:red">**최근 종영한 재벌집 막내아들이란 드라마의 영향**</span>이 있는 것으로 보여집니다.
+#### 4) 저는 이 <span style="color:red">**키워드 중에서 청약이란 키워드**</span>에 대해 더 자세히 알아보겠습니다.
+<br />
+
+# **3. 청약 데이터 수집 및 시각화**
+
+### **A. 빈 벡터 생성**
+```{r}
+title_c <- c()
+blog_c <- c()
+time_c <- c()
+body_c <- c()
+p_url_c <- 'https://search.daum.net/search?nil_suggest=btn&w=blog&DA=PGD&q=%EB%B6%80%EB%8F%99%EC%82%B0+%EC%9E%AC%ED%85%8C%ED%81%AC+%EC%B2%AD%EC%95%BD&p='
+```
+<br />
+
+#### 1) 청약 데이터를 수집하기 위한 빈 벡터를 생성했습니다.
+<br />
+
+### **B. 청약 데이터 수집**
+```{r}
+for(i in 1:50){
+  c_url_c <- paste0(p_url_c,i)
+  title_c_css <- ".f_link_b"
+  time_c_css <- ".date"
+  blog_c_css <- '.f_l :nth-child(2)'
+  body_c_css <- "#blogColl .desc"
+  
+  html_c_doc <- read_html(p_url_c)
+  title_c_node <- html_nodes(html_c_doc,title_c_css)
+  blog_c_node <- html_nodes(html_c_doc,blog_c_css)
+  time_c_node <- html_nodes(html_c_doc,time_c_css)
+  body_c_node <- html_nodes(html_c_doc,body_c_css)
+  
+  title_c_part <- html_text(title_c_node)
+  blog_c_part <- html_text(blog_c_node)
+  time_c_part <- html_text(time_c_node)
+  body_c_part <- html_text(body_c_node)
+  
+  title_c <- c(title_c,title_c_part)
+  time_c <- c(time_c,time_c_part)
+  blog_c <- c(blog_c,blog_c_part)
+  body_c <- c(body_c,body_c_part)
+}
+c_blog <- data.frame(title_c,blog_c,time_c,body_c)
+head(c_blog)
+```
+<br />
+
+#### 1) 청약 데이터를 다음 블로그에서 수집하였습니다.
+#### 2) 6개 행만 출력하였습니다.
+<br />
+
+### **C. 청약 데이터 정제**
+```{r}
+c_blogs <- c_blog
+c_text <- sapply(c_blogs,extractNoun,USE.NAMES = F)
+c_text <- unlist(c_text)
+c_text <- gsub('[^ㄱ-힣A-Za-z]','',c_text)
+c_text <- gsub('[청약|부동산|재테크|신조어|관련하|com|only|우롱고롱]','',c_text)
+c_count <- Filter(function(x){nchar(x)>=2 & nchar(x)<5},c_text)
+```
+<br />
+
+#### 1) 데이터 정제 과정은 위와 동일하게 진행했습니다.
+<br />
+
+### **D. 청약 데이터 도수분포표**
+```{r}
+c_word <- table(c_count)
+head(sort(c_word,decreasing = T),30)
+```
+<br />
+
+#### 1) 청약 데이터 도수분포표를 정렬하여 상위 30개 키워드를 출력했습니다.
+<br />
+
+### **E. 청약 데이터 시각화**
+```{r}
+palate <- brewer.pal(9,"Set1")
+wordcloud(names(c_word),
+          freq=c_word,
+          min.freq = 2,
+          scale = c(5,0.1),
+          random.order = F,
+          random.color = T,
+          rot.per = 0.2,
+          colors = palate)
+```
+<br />
+
+#### 1) <span style="color:red">**청약 데이터를 wordcloud**</span>로 시각화하였습니다.
+#### 2) <span style="color:red">**투자, 특별, 서울, 주택**</span> 등이 눈에 많이 띄고 있습니다.
+#### 3) <span style="color:red">**청약 특별 공급이나 서울 청약, 경쟁률**</span> 등이 위의 부동산이나 재테크 관련 데이터와 차별점이 있습니다.
+#### 4) 그래서 저는 <span style="color:red">**서울 청약에 대해 더 알아보도록 하겠습니다.**</span>
+<br />
+
+# **4. 서울 청약 데이터 수집 및 시각화**
+
+### **A. 빈 벡터 생성**
+```{r}
+title_seoul <- c()
+blog_seoul <- c()
+time_seoul <- c()
+body_seoul <- c()
+p_url_seoul <- 'https://search.daum.net/search?nil_suggest=btn&w=blog&DA=PGD&q=%EB%B6%80%EB%8F%99%EC%82%B0+%EC%9E%AC%ED%85%8C%ED%81%AC+%EC%B2%AD%EC%95%BD+%EC%84%9C%EC%9A%B8&p='
+```
+<br />
+
+#### 1) <span style="color:red">**빈 벡터 생성부터 데이터 정제까지의 과정은 위와 같아 설명은 생략하겠습니다.**</span>
+<br />
+
+### **B. 서울 청약 데이터 수집**
+```{r}
+for(i in 1:50){
+  c_url_seoul <- paste0(p_url_seoul,i)
+  title_seoul_css <- ".f_link_b"
+  time_seoul_css <- ".date"
+  blog_seoul_css <- '.f_l :nth-child(2)'
+  body_seoul_css <- "#blogColl .desc"
+  
+  html_seoul_doc <- read_html(p_url_seoul)
+  title_seoul_node <- html_nodes(html_seoul_doc,title_seoul_css)
+  blog_seoul_node <- html_nodes(html_seoul_doc,blog_seoul_css)
+  time_seoul_node <- html_nodes(html_seoul_doc,time_seoul_css)
+  body_seoul_node <- html_nodes(html_seoul_doc,body_seoul_css)
+  
+  title_seoul_part <- html_text(title_seoul_node)
+  blog_seoul_part <- html_text(blog_seoul_node)
+  time_seoul_part <- html_text(time_seoul_node)
+  body_seoul_part <- html_text(body_seoul_node)
+  
+  title_seoul <- c(title_seoul,title_seoul_part)
+  time_seoul <- c(time_seoul,time_seoul_part)
+  blog_seoul <- c(blog_seoul,blog_seoul_part)
+  body_seoul <- c(body_seoul,body_seoul_part)
+}
+seoul_blog <- data.frame(title_seoul,blog_seoul,time_seoul,body_seoul)
+head(seoul_blog)
+```
+<br />
+
+<br />
+
+### **C. 서울 청약 데이터 정제**
+```{r}
+seoul_blogs <- seoul_blog
+seoul_text <- sapply(seoul_blogs,extractNoun,USE.NAMES = F)
+seoul_text <- unlist(seoul_text)
+seoul_text <- gsub('[^ㄱ-힣A-Za-z]','',seoul_text)
+seoul_text <- gsub('[청약|부동산|서울|재테크|묻지마|오늘|예정|자유|daum|asil|kr|net]','',seoul_text)
+seoul_count <- Filter(function(x){nchar(x)>=2 & nchar(x)<5},seoul_text)
+```
+<br />
+
+<br />
+
+### **D. 서울 청약 데이터 도수분포표**
+```{r}
+seoul_word <- table(seoul_count)
+head(sort(seoul_word,decreasing = T),30)
+```
+<br />
+
+<br />
+
+### **E. 서울 청약 데이터 시각화**
+```{r}
+palate <- brewer.pal(9,"Set1")
+wordcloud(names(seoul_word),
+          freq=seoul_word,
+          min.freq = 2,
+          scale = c(7,0.1),
+          random.order = F,
+          random.color = T,
+          rot.per = 0.2,
+          colors = palate)
+```
+<br />
+
+#### 1) <span style="color:red">**서울 청약 데이터를 wordcloud로 시각화**</span> 하였습니다.
+#### 2) <span style="color:red">**아파트 키워드**</span>가 가장 많이 등장한 키워드입니다.
+#### 3) 그 외 <span style="color:red">**통장, 경쟁률, 거주, 경매, 공급 등의 키워드**</span>가 있습니다.
+#### 4) 저는 조금 더 자세하게 보기 위해서 아파트 키워드를 이용해서 더 수집하겠습니다.
+#### 5) <span style="color:red">**서울 아파트 청약에 대한 데이터를 수집**</span>해보도록 하겠습니다.
+<br />
+
+# **5. 서울 아파트 청약 데이터 수집 및 시각화**
+
+### **A. 빈 벡터 생성**
+```{r}
+title_a <- c()
+blog_a <- c()
+time_a <- c()
+body_a <- c()
+p_url_a <- 'https://search.daum.net/search?nil_suggest=btn&w=blog&DA=PGD&q=%EB%B6%80%EB%8F%99%EC%82%B0+%EC%84%9C%EC%9A%B8+%EC%95%84%ED%8C%8C%ED%8A%B8+%EC%B2%AD%EC%95%BD&p='
+```
+<br />
+
+#### 1) <span style="color:red">**빈 벡터 생성부터 데이터 정제까지의 과정은 위와 같아 설명은 생략하겠습니다.**</span>
+<br />
+
+### **B. 서울 아파트 청약 데이터 수집**
+```{r}
+for(i in 1:50){
+  c_url_a <- paste0(p_url_a,i)
+  title_a_css <- ".f_link_b"
+  time_a_css <- ".date"
+  blog_a_css <- '.f_l :nth-child(2)'
+  body_a_css <- "#blogColl .desc"
+  
+  html_a_doc <- read_html(p_url_a)
+  title_a_node <- html_nodes(html_a_doc,title_a_css)
+  blog_a_node <- html_nodes(html_a_doc,blog_a_css)
+  time_a_node <- html_nodes(html_a_doc,time_a_css)
+  body_a_node <- html_nodes(html_a_doc,body_a_css)
+  
+  title_a_part <- html_text(title_a_node)
+  blog_a_part <- html_text(blog_a_node)
+  time_a_part <- html_text(time_a_node)
+  body_a_part <- html_text(body_a_node)
+  
+  title_a <- c(title_a,title_a_part)
+  time_a <- c(time_a,time_a_part)
+  blog_a <- c(blog_a,blog_a_part)
+  body_a <- c(body_a,body_a_part)
+}
+a_blog <- data.frame(title_a,blog_a,time_a,body_a)
+head(a_blog)
+```
+<br />
+
+<br />
+
+### **C. 서울 아파트 청약 데이터 정제**
+```{r}
+a_blogs <- a_blog
+a_text <- sapply(a_blogs,extractNoun,USE.NAMES = F)
+a_text <- unlist(a_text)
+a_text <- gsub('[^ㄱ-힣A-Za-z]','',a_text)
+a_text <- gsub('[청약|서울|부동산|아파트||무순|메모덕후|pdf|타버스]','',a_text)
+a_count <- Filter(function(x){nchar(x)>=2 & nchar(x)<5},a_text)
+```
+<br />
+
+<br />
+
+### **D. 서울 아파트 청약 데이터 도수분포표**
+```{r}
+a_word <- table(a_count)
+head(sort(a_word,decreasing = T),30)
+```
+<br />
+
+<br />
+
+### **E. 서울 아파트 청약 데이터 시각화**
+```{r}
+palate <- brewer.pal(9,"Set1")
+wordcloud(names(a_word),
+          freq=a_word,
+          min.freq = 2,
+          scale = c(5,0.1),
+          random.order = F,
+          random.color = T,
+          rot.per = 0.2,
+          colors = palate)
+```
+<br />
+
+#### 1) 서울 아파트 청약 데이터를 wordcloud로 시각화하였습니다.
+#### 2) <span style="color:red">**당첨, 분양 시장 등의 키워드**</span>가 가장 많이 나왔습니다.
+#### 3) 그 외 <span style="color:red">**강남, 경쟁률, 뉴스, 둔촌주공, 노도강, 분양가**</span> 등의 내용이 나왔습니다.
+#### 4) 저는 마지막으로 <span style="color:red">**서울 아파트 청약 분양**</span>에 대해 알아보도록 하겠습니다.
+<br />
+
+# **6. 서울 아파트 청약 분양 데이터 수집 및 시각화**
+
+### **A. 빈 벡터 생성**
+```{r}
+title_l <- c()
+blog_l <- c()
+time_l <- c()
+body_l <- c()
+p_url_l <- 'https://search.daum.net/search?nil_suggest=btn&w=blog&DA=PGD&q=%EB%B6%80%EB%8F%99%EC%82%B0+%EC%84%9C%EC%9A%B8+%EC%95%84%ED%8C%8C%ED%8A%B8+%EC%B2%AD%EC%95%BD+%EB%B6%84%EC%96%91&p='
+```
+<br />
+
+#### 1) <span style="color:red">**빈 벡터 생성부터 데이터 정제까지의 과정은 위와 같아 설명은 생략하겠습니다.**</span>
+<br />
+
+### **B. 서울 아파트 청약 분양 데이터 수집**
+```{r}
+for(i in 1:50){
+  c_url_l <- paste0(p_url_l,i)
+  title_l_css <- ".f_link_b"
+  time_l_css <- ".date"
+  blog_l_css <- '.f_l :nth-child(2)'
+  body_l_css <- "#blogColl .desc"
+  
+  html_l_doc <- read_html(p_url_l)
+  title_l_node <- html_nodes(html_l_doc,title_l_css)
+  blog_l_node <- html_nodes(html_l_doc,blog_l_css)
+  time_l_node <- html_nodes(html_l_doc,time_l_css)
+  body_l_node <- html_nodes(html_l_doc,body_l_css)
+  
+  title_l_part <- html_text(title_l_node)
+  blog_l_part <- html_text(blog_l_node)
+  time_l_part <- html_text(time_l_node)
+  body_l_part <- html_text(body_l_node)
+  
+  title_l <- c(title_a,title_l_part)
+  time_l <- c(time_a,time_l_part)
+  blog_l <- c(blog_a,blog_l_part)
+  body_l <- c(body_a,body_l_part)
+}
+l_blog <- data.frame(title_l,blog_l,time_l,body_l)
+head(l_blog)
+```
+<br />
+
+<br />
+
+### **C. 서울 아파트 청약 분양 데이터 정제**
+```{r}
+l_blogs <- l_blog
+l_text <- sapply(l_blogs,extractNoun,USE.NAMES = F)
+l_text <- unlist(l_text)
+l_text <- gsub('[^ㄱ-힣A-Za-z]','',l_text)
+l_text <- gsub('[청약|서울|아파트|부동산|분양|메타버스|무순|메모덕후|올해]','',l_text)
+l_count <- Filter(function(x){nchar(x)>=2 & nchar(x)<5},l_text)
+```
+<br />
+
+<br />
+
+### **D. 서울 아파트 청약 분양 데이터 도수분포표**
+```{r}
+l_word <- table(l_count)
+head(sort(l_word,decreasing = T),30)
+```
+<br />
+
+<br />
+
+### **E. 서울 아파트 청약 분양 데이터 시각화**
+```{r}
+palate <- brewer.pal(9,"Set1")
+wordcloud(names(l_word),
+          freq=l_word,
+          min.freq = 2,
+          scale = c(5,0.1),
+          random.order = F,
+          random.color = T,
+          rot.per = 0.2,
+          colors = palate)
+```
+<br />
+
+#### 1) <span style="color:red">**서울 아파트 청약 분양 데이터를 wordcloud로 시각화**</span> 하였습니다.
+#### 2) <span style="color:red">**시장, 당첨, 예정 등의 키워드**</span>가 가장 많이 나왔습니다.
+#### 3) 그 외 <span style="color:red">**강남, 경쟁률, 주택, 입주, 줍줍 등의 키워드**</span>가 나왔습니다.
+#### 4) <span style="color:red">**서울 아파트 청약 데이터를 분석했을 때와 비슷한 키워드가 많이 나왔습니다.**</span>
+<br />
+
+# **7. 요약**
+#### 1) <span style="color:red">**재테크로 키워드를 수집하기 시작해서 서울 아파트 청약 분양 키워드까지 알아봤습니다.**</span>
+#### 2) <span style="color:red">**재테크로 부동산 투자를 가장 많이 생각한다는 것**</span>을 알게 되었습니다.
+#### 3) 새해가 된지 얼마 안되서 <span style="color:red">**2023년 청약 및 분양에 대한 일정, 예정, 경쟁률에 대해 관심이 많다는 것**</span>을 알게 되었습니다.
+#### 4) <span style="color:red">**가장 많은 관심을 보이는 지역은 강남이라는 것**</span>을 알게 되었습니다.
+#### 5) <span style="color:red">**최근 뜨거운 감자인 둔촌주공 아파트 키워드도 많이 나왔습니다.**</span>
+#### 6) <span style="color:red">**최근 부동산 신조어로 떠오르는 '줍줍'이란 단어에 대해 알게 되었습니다.**</span>
+#### 7) wordcloud2는 r markdown에서 한 번 밖에 실행이 되지 않습니다.
